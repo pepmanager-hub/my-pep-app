@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Peptide Web">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063183.png">
+    
+    <title>펩타이드 매니저 (웹 버전)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #27ae60;
+            --primary-light: #e8f6f3;
+            --secondary-color: #f5f7fa;
+            --border-color: #ddd;
+            --danger-color: #e74c3c;
+            --edit-color: #f39c12;
+            --table-header-bg: #e8f6f3;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif; 
+            margin: 0; padding: 20px; 
+            padding-top: env(safe-area-inset-top); 
+            background-color: #f0f2f5; color: #333; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding-bottom: 50px; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h2 { border-bottom: 2px solid var(--secondary-color); padding-bottom: 10px; margin-top: 0; color: #2c3e50; font-size: 1.3em; }
+        
+        /* 엑셀 패널 */
+        .excel-panel {
+            background-color: #fff; padding: 15px; border-radius: 12px; border: 1px solid #27ae60;
+            margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+        }
+        .btn-excel-save { background-color: #27ae60; color: white; padding: 12px 15px; font-size: 1em; border:none; border-radius:8px; cursor:pointer; font-weight:bold; }
+        .btn-excel-load { background-color: #7f8c8d; color: white; padding: 12px 15px; font-size: 1em; border:none; border-radius:8px; cursor:pointer; font-weight:bold; margin-left: 5px; }
+        
+        /* 공통 UI 요소 */
+        .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: flex-end; }
+        .form-group { flex: 1; min-width: 0; }
+        
+        label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.95em; color: #555; }
+        
+        input, select { width: 100%; padding: 14px 12px; border: 1px solid var(--border-color); border-radius: 10px; box-sizing: border-box; font-size: 17px; }
+
+        input[type="date"], input[type="time"] {
+            appearance: none; -webkit-appearance: none; 
+            padding: 14px 5px;
+            text-align: center;
+        }
+        
+        button.action-btn { background-color: #3498db; color: white; border: none; padding: 14px 20px; border-radius: 10px; cursor: pointer; height: 50px; font-size: 1.05em; font-weight: bold; width: 100%; }
+        
+        .btn-stack { display: flex; flex-direction: column; gap: 4px; }
+        button.delete-btn { background-color: var(--danger-color); padding: 6px 12px; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em; width: 100%; }
+        button.edit-btn { background-color: var(--edit-color); padding: 6px 12px; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em; width: 100%; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.95em; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        th { background-color: var(--table-header-bg); font-weight: bold; color: #27ae60; }
+
+        /* 탭 스타일 */
+        .tabs { display: flex; margin-bottom: 15px; background: #e0e0e0; border-radius: 10px; padding: 4px; }
+        .tab-btn { flex: 1; text-align: center; color: #666; padding: 12px 0; border-radius: 8px; cursor: pointer; transition: 0.2s; font-weight: bold; font-size: 1em; }
+        .tab-btn.active { background: white; color: #3498db; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 그래프 컨테이너 */
+        .chart-container { position: relative; height: 400px; width: 100%; }
+        .table-responsive { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+        
+        /* 히스토리 필터 헤더 */
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 12px; width: 100%; }
+        .list-header h3 { margin: 0; white-space: nowrap; flex-shrink: 0; margin-right: 15px; font-size: 1.1em; }
+        #historyFilterSelect { flex-grow: 1; min-width: 0; width: auto; max-width: 60%; padding: 10px; }
+
+        /* 계산기 스타일 */
+        .calc-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 20px; }
+        @media (min-width: 600px) { .calc-grid { grid-template-columns: repeat(2, 1fr); } }
+        
+        .calc-card { background: #fafafa; border: 1px solid #eee; border-radius: 10px; padding: 18px; }
+        .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        
+        .pill { padding: 10px 16px; border-radius: 25px; border: 1px solid #ddd; background: #fff; font-size: 1em; cursor: pointer; }
+        .pill.active { background: var(--primary-light); border-color: var(--primary-color); color: var(--primary-color); font-weight: bold; }
+        
+        .unit-label { font-size: 1em; color: #555; margin-left: 8px; white-space: nowrap; }
+        .muted { font-size: 0.9em; color: #777; margin-top: 6px; }
+        
+        .outputs { margin-top: 20px; border-top: 2px dashed #ddd; padding-top: 20px; }
+        .output-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .output-box { background: #e8f6f3; border: 1px solid #27ae60; border-radius: 10px; padding: 15px; text-align: center; }
+        .output-title { font-weight: bold; font-size: 0.9em; color: #27ae60; margin-bottom: 5px; }
+        .output-value { font-size: 1.25em; font-weight: bold; color: #333; }
+        
+        .calc-btn-row { margin-top: 20px; display: flex; gap: 12px; }
+        .btn-calc-reset { flex:1; background-color: #95a5a6; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
+        .btn-calc-run { flex:2; background-color: #27ae60; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
+        
+        .warning-text { color: var(--danger-color); font-size: 0.95em; margin-top: 8px; font-weight: bold; }
+        .error-box { background-color: #fdecea; color: var(--danger-color); padding: 14px; border-radius: 10px; margin-bottom: 15px; display: none; border: 1px solid #fadbd8; font-weight: bold; }
+
+        .current-level-box {
+            margin-top: 10px;
+            background-color: #e8f8f5;
+            border: 1px solid #27ae60;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            display: none;
+        }
+        .current-level-title { font-size: 0.9em; color: #27ae60; font-weight: bold; margin-bottom: 4px; }
+        .current-level-value { font-size: 1.4em; font-weight: bold; color: #219150; }
+
+        /* 접기/펼치기 관련 스타일 */
+        .toggle-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .toggle-icon { font-size: 0.8em; color: #7f8c8d; transition: transform 0.3s; }
+        .toggle-content { display: none; margin-top: 15px; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="text-align:center; margin-bottom:20px; padding-top:10px;">
+            <h1 style="margin:0; font-size:1.6em; color:#2c3e50;">💊 펩타이드 매니저</h1>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab-btn" onclick="showTab('manage')">기록 관리</div>
+            <div class="tab-btn active" onclick="showTab('analyze')">그래프</div>
+            <div class="tab-btn" onclick="showTab('calculator')">계산기</div>
+        </div>
+
+        <div id="manage" class="tab-content">
+            <div class="card">
+                <div class="toggle-header" onclick="toggleSection('drugRegisterContent', 'drugArrow')">
+                    <h2 style="border:none; margin:0;">1. 펩타이드 등록</h2>
+                    <span id="drugArrow" class="toggle-icon">▼</span>
+                </div>
+                
+                <div id="drugRegisterContent" class="toggle-content">
+                    <div style="border-top: 2px solid #f5f7fa; padding-top: 15px; margin-bottom: 15px;"></div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label>펩타이드명</label>
+                            <input type="text" id="drugName" placeholder="예: Tirzepatide">
+                        </div>
+                        <div class="form-group">
+                            <label>단위</label>
+                            <select id="drugUnit">
+                                <option value="mg">mg</option>
+                                <option value="mcg">mcg</option>
+                                <option value="IU">IU</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>반감기 (시간)</label>
+                            <input type="number" id="drugHalfLife" placeholder="예: 120 (5일)">
+                        </div>
+                        <div class="form-group" style="flex:2">
+                            <label>메모</label>
+                            <input type="text" id="drugNote" placeholder="설명">
+                        </div>
+                    </div>
+                    <button class="action-btn" onclick="addDrug()">펩타이드 추가하기</button>
+                    
+                    <div class="table-responsive" style="margin-top:15px;">
+                        <table id="drugTable">
+                            <thead><tr><th>펩타이드명</th><th>반감기 / 용량단위</th><th>수정/삭제</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>2. 투여 기록 입력</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>펩타이드 선택</label>
+                        <select id="logDrugSelect" onchange="updateDoseLabel()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label id="doseLabel">용량</label>
+                        <input type="number" id="logDose" placeholder="숫자">
+                    </div>
+                    <div class="form-group">
+                        <label>부위</label>
+                        <input type="text" id="logSite" placeholder="예: 복부상단">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>날짜</label><input type="date" id="logDate"></div>
+                    <div class="form-group"><label>시간</label><input type="time" id="logTime"></div>
+                </div>
+                <button class="action-btn" onclick="addLog()">투여 기록 추가</button>
+
+                <div style="margin-top: 30px;">
+                    <div class="toggle-header" onclick="toggleSection('logListContent', 'logListArrow')" style="padding: 10px 0; border-bottom: 2px solid #eee;">
+                        <h3 style="margin:0;">📋 최근 기록 보기</h3>
+                        <span id="logListArrow" class="toggle-icon">▼</span>
+                    </div>
+
+                    <div id="logListContent" class="toggle-content">
+                        <div style="margin-top:10px; margin-bottom:10px;">
+                            <select id="historyFilterSelect" onchange="updateUI()">
+                                <option value="all">전체 보기</option>
+                            </select>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="logTable">
+                                <thead><tr><th>일시</th><th>내용</th><th>수정/삭제</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="excel-panel">
+                <div style="font-size:0.95em; font-weight:bold; color:#27ae60; width:100%; margin-bottom:8px;">📂 데이터 백업 (엑셀)</div>
+                <input type="file" id="excelInput" accept=".xlsx, .xls" onchange="storeFile(event)" style="width:100%; margin-bottom:8px;">
+                <div style="display:flex; gap:8px; width:100%;">
+                    <button class="btn-excel-load" style="flex:1" onclick="loadStoredFile()">불러오기</button>
+                    <button class="btn-excel-save" style="flex:1" onclick="exportToExcel()">저장하기</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="analyze" class="tab-content active">
+            <div class="card">
+                <h2>📈 체내 펩타이드 잔존량 분석</h2>
+                <div class="form-group" style="margin-bottom:15px;">
+                    <label>분석할 펩타이드</label>
+                    <select id="graphDrugSelect" onchange="renderChart()" style="background-color: #e8f8f5; border-color: #27ae60; font-weight: bold;">
+                        <option value="">-- 펩타이드 선택 --</option>
+                    </select>
+                    
+                    <div id="currentLevelBox" class="current-level-box">
+                        <div class="current-level-title">현재 시각 기준 예상 잔존량</div>
+                        <div id="currentLevelValue" class="current-level-value">0</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>시작일</label>
+                        <input type="date" id="graphStartDate" onchange="renderChart()">
+                    </div>
+                    <div class="form-group">
+                        <label>종료일</label>
+                        <input type="date" id="graphEndDate" onchange="renderChart()">
+                    </div>
+                </div>
+                <div class="chart-container" style="margin-top:20px;"><canvas id="stackChart"></canvas></div>
+            </div>
+        </div>
+
+        <div id="calculator" class="tab-content">
+            <div class="card">
+                <h2>💉 재구성 계산기</h2>
+                <div id="calcErrorBox" class="error-box"></div>
+
+                <div class="section-title" style="font-weight:bold; color:#555; margin-bottom:12px; font-size:1.1em;">1. 재구성 조건</div>
+                <div class="calc-grid">
+                    <div class="calc-card">
+                        <div class="label">바이알의 펩타이드 양 (mg)</div>
+                        <div class="pill-row" data-group="peptide">
+                            <div class="pill" data-value="10">10</div>
+                            <div class="pill" data-value="30">30</div>
+                            <div class="pill" data-value="60">60</div>
+                            <div class="pill" data-value="custom">입력</div>
+                        </div>
+                        <input type="number" id="peptideMg" placeholder="예: 10">
+                    </div>
+                    <div class="calc-card">
+                        <div class="label">투입할 BAC water 양 (mL)</div>
+                        <div class="pill-row" data-group="water">
+                            <div class="pill" data-value="1.8">1.8</div>
+                            <div class="pill" data-value="2.4">2.4</div>
+                            <div class="pill" data-value="3.0">3.0</div>
+                            <div class="pill" data-value="custom">입력</div>
+                        </div>
+                        <input type="number" id="waterMl" placeholder="예: 2">
+                        <div class="muted" id="waterCcText" style="color:#27ae60; font-weight:bold;"></div>
+                    </div>
+                    <div class="calc-card">
+                        <div class="label">1회 투여량 (mcg)</div>
+                        <div class="pill-row" data-group="dose">
+                            <div class="pill" data-value="250">250</div>
+                            <div class="pill" data-value="500">500</div>
+                            <div class="pill" data-value="custom">입력</div>
+                        </div>
+                        <input type="number" id="doseMcg" placeholder="예: 500">
+                        <div class="muted" id="doseMgText" style="color:#27ae60; font-weight:bold;"></div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="font-weight:bold; color:#555; margin-bottom:12px; font-size:1.1em;">2. 투여 주기</div>
+                <div class="calc-card" style="margin-bottom:15px;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>주기</label>
+                            <input type="number" id="intervalCount" placeholder="1">
+                        </div>
+                        <div class="form-group">
+                            <label>단위</label>
+                            <select id="intervalUnit">
+                                <option value="week" selected>주</option>
+                                <option value="day">일</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>횟수</label>
+                            <input type="number" id="intervalTimes" placeholder="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="font-weight:bold; color:#555; margin-bottom:12px; font-size:1.1em;">3. 비용 (선택)</div>
+                <div class="calc-card">
+                     <div class="form-row">
+                        <div class="form-group">
+                            <label>화폐</label>
+                            <select id="currencyUnit">
+                                <option value="">선택 안함</option>
+                                <option value="KRW">원 (KRW)</option>
+                                <option value="USD">달러 (USD)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>가격 기준</label>
+                             <select id="peptidePriceType">
+                                <option value="vial">1 바이알</option>
+                                <option value="kit">1 키트(10바이알)</option>
+                            </select>
+                        </div>
+                     </div>
+                     <div class="form-group" style="margin-top:10px;">
+                        <label>금액 입력</label>
+                        <input type="number" id="peptidePrice" placeholder="금액을 입력하세요 (숫자)">
+                    </div>
+                </div>
+
+                <div class="calc-btn-row">
+                    <button class="btn-calc-reset" id="resetCalcBtn">초기화</button>
+                    <button class="btn-calc-run" id="calcBtn">계산하기</button>
+                </div>
+
+                <div class="outputs">
+                    <div class="output-grid">
+                        <div class="output-box">
+                            <div class="output-title">농도</div>
+                            <div class="output-value" id="concMgMl">-</div>
+                            <div class="muted" id="concMcgMl">-</div>
+                        </div>
+                        <div class="output-box">
+                            <div class="output-title">1회 투여 부피</div>
+                            <div class="output-value" id="volMl">-</div>
+                            <div class="muted" id="volCc">-</div>
+                        </div>
+                        <div class="output-box">
+                            <div class="output-title">인슐린 주사 단위 (IU)</div>
+                            <div class="output-value" id="uiUnits">-</div>
+                            <div class="muted">1클릭=1IU</div>
+                        </div>
+                        <div class="output-box">
+                            <div class="output-title">바이알 사용 기간</div>
+                            <div class="output-value" id="vialUsage">-</div>
+                            <div class="muted" id="vialRemain" style="color:#e74c3c; font-size:0.85em; margin-top:4px;"></div>
+                        </div>
+                    </div>
+                    <div class="warning-text" id="penWarning" style="display:none; text-align:center; margin-top:10px;"></div>
+                    
+                    <div class="output-box" id="monthlyCostBox" style="display:none; margin-top:10px; background:#fdfefe; border-color:#3498db;">
+                        <div class="output-title" style="color:#3498db;">월 예상 비용</div>
+                        <div class="output-value" id="monthlyCostValue">-</div>
+                        <div class="muted" id="monthlyCostDetail">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= 데이터 자동 저장 로직 =================
+        const STORAGE_KEY_DRUGS = 'peptide_v10_drugs';
+        const STORAGE_KEY_LOGS = 'peptide_v10_logs';
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY_DRUGS, JSON.stringify(drugs));
+            localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
+        }
+
+        function loadData() {
+            const savedDrugs = localStorage.getItem(STORAGE_KEY_DRUGS);
+            const savedLogs = localStorage.getItem(STORAGE_KEY_LOGS);
+            
+            if (savedDrugs) drugs = JSON.parse(savedDrugs);
+            if (savedLogs) logs = JSON.parse(savedLogs);
+            
+            updateUI();
+        }
+
+        // ================= UI 토글 로직 =================
+        function toggleSection(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            
+            if (content.style.display === 'block') {
+                content.style.display = 'none';
+                icon.innerText = '▼';
+            } else {
+                content.style.display = 'block';
+                icon.innerText = '▲';
+            }
+        }
+
+        // ================= 기존 매니저 로직 =================
+        let drugs = [];
+        let logs = [];
+        let selectedFile = null;
+        let editingDrugId = null; 
+        
+        document.getElementById('logDate').valueAsDate = new Date();
+        document.getElementById('logTime').value = new Date().toTimeString().slice(0,5);
+        
+        const today = new Date();
+        const startDefault = new Date(today); startDefault.setMonth(today.getMonth() - 1);
+        const endDefault = new Date(today); endDefault.setDate(today.getDate() + 14);
+        
+        document.getElementById('graphStartDate').value = startDefault.toISOString().split('T')[0];
+        document.getElementById('graphEndDate').value = endDefault.toISOString().split('T')[0];
+
+        function fixTimeFormat(logs) {
+            let fixedCount = 0;
+            logs.forEach(l => {
+                if (l.datetime && l.datetime.includes('T')) {
+                    const parts = l.datetime.split('T');
+                    const datePart = parts[0];
+                    let timePart = parts[1];
+                    if (timePart.length === 4) { 
+                        timePart = '0' + timePart;
+                        l.datetime = datePart + 'T' + timePart;
+                        fixedCount++;
+                    }
+                }
+            });
+            return logs;
+        }
+
+        function storeFile(event) { selectedFile = event.target.files[0]; }
+
+        function loadStoredFile() {
+            if (!selectedFile) { alert("먼저 파일을 선택해주세요."); return; }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const now = Date.now();
+                    if (workbook.Sheets['Drugs']) {
+                        const newDrugs = XLSX.utils.sheet_to_json(workbook.Sheets['Drugs']);
+                        drugs = newDrugs.map((d, idx) => ({ ...d, id: d.id || (now + idx) }));
+                    }
+                    if (workbook.Sheets['Logs']) {
+                        let newLogs = XLSX.utils.sheet_to_json(workbook.Sheets['Logs']);
+                        newLogs = newLogs.map((l, idx) => ({ ...l, id: l.id || (now + 1000 + idx) }));
+                        logs = fixTimeFormat(newLogs);
+                    }
+                    saveData();
+                    alert("데이터 로드 완료! (" + logs.length + "개의 기록)");
+                    updateUI();
+                } catch (error) {
+                    console.error(error);
+                    alert("파일 오류: 올바른 엑셀 파일인지 확인해주세요.");
+                }
+            };
+            reader.readAsArrayBuffer(selectedFile);
+        }
+
+        function exportToExcel() {
+            if (drugs.length === 0 && logs.length === 0) return alert("저장할 데이터가 없습니다.");
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(drugs), "Drugs");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logs), "Logs");
+            const now = new Date();
+            const filename = `Peptide_DB_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate()}.xlsx`;
+            XLSX.writeFile(wb, filename);
+        }
+
+        function addDrug() {
+            const name = document.getElementById('drugName').value;
+            const unit = document.getElementById('drugUnit').value;
+            const halfLife = parseFloat(document.getElementById('drugHalfLife').value);
+            const note = document.getElementById('drugNote').value;
+            if (!name || isNaN(halfLife)) return alert("펩타이드명과 반감기는 필수입니다.");
+            
+            const id = editingDrugId || Date.now();
+            
+            if (editingDrugId) {
+                logs.forEach(l => {
+                    if (l.drugId === id) {
+                        l.drugName = name;
+                        l.unit = unit;
+                        l.halfLife = halfLife;
+                    }
+                });
+            }
+            
+            drugs.push({ id: id, name: name, unit: unit, halfLife: halfLife, note: note });
+            
+            editingDrugId = null;
+            
+            saveData();
+            updateUI();
+            
+            // 알림 및 초기화
+            alert("펩타이드가 저장되었습니다.");
+            document.getElementById('drugName').value = '';
+            document.getElementById('drugHalfLife').value = '';
+            document.getElementById('drugNote').value = '';
+        }
+
+        function editDrug(id) {
+            const drug = drugs.find(d => d.id == id);
+            if(!drug) return;
+
+            document.getElementById('drugName').value = drug.name;
+            document.getElementById('drugUnit').value = drug.unit;
+            document.getElementById('drugHalfLife').value = drug.halfLife;
+            document.getElementById('drugNote').value = drug.note || '';
+
+            editingDrugId = id;
+
+            drugs = drugs.filter(d => d.id !== id);
+            
+            updateUI();
+            
+            document.querySelector('#drugRegisterContent').scrollIntoView({behavior: 'smooth'});
+        }
+
+        function deleteDrug(id) {
+            if (!confirm("삭제하시겠습니까? 관련 투여 기록도 삭제됩니다.")) return;
+            drugs = drugs.filter(d => d.id !== id);
+            logs = logs.filter(l => l.drugId !== id);
+            saveData();
+            updateUI();
+        }
+
+        function addLog() {
+            const drugId = document.getElementById('logDrugSelect').value;
+            const dose = parseFloat(document.getElementById('logDose').value);
+            const site = document.getElementById('logSite').value;
+            const date = document.getElementById('logDate').value;
+            const time = document.getElementById('logTime').value;
+            if (!drugId || isNaN(dose)) return alert("펩타이드와 용량을 확인하세요.");
+            const drug = drugs.find(d => d.id == drugId);
+            logs.push({
+                id: Date.now(),
+                drugId: parseInt(drugId),
+                drugName: drug.name,
+                unit: drug.unit || 'mg',
+                halfLife: drug.halfLife,
+                dose: dose,
+                site: site,
+                datetime: `${date}T${time}`
+            });
+            saveData();
+            updateUI();
+            
+            // 알림 및 초기화 (용량, 부위 삭제 / 시간 갱신)
+            alert("투여 기록이 추가되었습니다.");
+            document.getElementById('logDose').value = '';
+            document.getElementById('logSite').value = '';
+            document.getElementById('logDate').valueAsDate = new Date();
+            document.getElementById('logTime').value = new Date().toTimeString().slice(0,5);
+        }
+
+        function deleteLog(id) {
+            if (!id && id !== 0) return;
+            if (!confirm("기록을 삭제합니까?")) return;
+            logs = logs.filter(l => l.id != id);
+            saveData();
+            updateUI();
+        }
+
+        function editLog(id) {
+            const log = logs.find(l => l.id == id);
+            if(!log) return;
+
+            document.getElementById('logDrugSelect').value = log.drugId;
+            updateDoseLabel();
+            document.getElementById('logDose').value = log.dose;
+            document.getElementById('logSite').value = log.site;
+            
+            if(log.datetime.includes('T')) {
+                const parts = log.datetime.split('T');
+                document.getElementById('logDate').value = parts[0];
+                document.getElementById('logTime').value = parts[1];
+            }
+
+            if(confirm("이 기록을 불러와서 수정하시겠습니까?\n(현재 목록에서 사라지고 입력창으로 이동합니다)")) {
+                logs = logs.filter(l => l.id != id);
+                saveData();
+                updateUI();
+                
+                const inputArea = document.querySelector('.card:nth-of-type(2)');
+                if(inputArea) inputArea.scrollIntoView({behavior: 'smooth'});
+            }
+        }
+
+        function updateDoseLabel() {
+            const select = document.getElementById('logDrugSelect');
+            const drugId = select.value;
+            const label = document.getElementById('doseLabel');
+            if (!drugId) { label.innerText = '용량'; return; }
+            const drug = drugs.find(d => d.id == drugId);
+            if (drug) label.innerText = `용량 (${drug.unit || 'mg'})`;
+        }
+
+        function updateUI() {
+            const drugTbody = document.querySelector('#drugTable tbody');
+            drugTbody.innerHTML = '';
+            drugs.forEach(d => {
+                drugTbody.innerHTML += `
+                <tr>
+                    <td><strong>${d.name}</strong></td>
+                    <td><span style="font-size:0.9em; color:#666;">${d.halfLife}h / ${d.unit}</span><br><span style="font-size:0.85em; color:#999;">${d.note||''}</span></td>
+                    <td style="width: 70px;">
+                        <div class="btn-stack">
+                            <button class="edit-btn" onclick="editDrug(${d.id})">수정</button>
+                            <button class="delete-btn" onclick="deleteDrug(${d.id})">삭제</button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+            
+            const logSelect = document.getElementById('logDrugSelect');
+            const graphSelect = document.getElementById('graphDrugSelect');
+            const filterSelect = document.getElementById('historyFilterSelect');
+            
+            const prevLog = logSelect.value;
+            const prevGraph = graphSelect.value;
+            const prevFilter = filterSelect.value;
+
+            logSelect.innerHTML = '<option value="">선택하세요</option>';
+            graphSelect.innerHTML = '<option value="">-- 펩타이드 선택 --</option>';
+            filterSelect.innerHTML = '<option value="all">전체 기록</option>';
+
+            drugs.forEach(d => {
+                const optText = `${d.name} (${d.unit||'mg'})`;
+                logSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                graphSelect.innerHTML += `<option value="${d.id}">${optText}</option>`;
+                filterSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+            });
+
+            if(prevLog) logSelect.value = prevLog;
+            if(prevGraph) graphSelect.value = prevGraph;
+            if(prevFilter) filterSelect.value = prevFilter;
+            
+            updateDoseLabel();
+
+            const logTbody = document.querySelector('#logTable tbody');
+            logTbody.innerHTML = '';
+            const curFilter = filterSelect.value;
+            const sorted = [...logs].sort((a,b) => new Date(b.datetime)-new Date(a.datetime));
+            
+            sorted.forEach(l => {
+                if(curFilter !== 'all' && l.drugId != curFilter) return;
+                
+                let datePart = '', timePart = '';
+                if(l.datetime.includes('T')) {
+                    const parts = l.datetime.split('T');
+                    datePart = parts[0].substring(2); 
+                    timePart = parts[1];
+                } else {
+                    datePart = l.datetime; 
+                }
+
+                logTbody.innerHTML += `
+                <tr>
+                    <td>${datePart}<br><span style="color:#888; font-size:0.85em;">${timePart}</span></td>
+                    <td><strong>${l.drugName}</strong><br>${l.dose}${l.unit||'mg'} / ${l.site||'-'}</td>
+                    <td style="width: 70px;">
+                        <div class="btn-stack">
+                            <button class="edit-btn" onclick="editLog(${l.id})">수정</button>
+                            <button class="delete-btn" onclick="deleteLog(${l.id})">삭제</button>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+            if(logTbody.innerHTML === '') logTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#999;">기록 없음</td></tr>';
+            
+            renderChart();
+        }
+
+        let chartInstance = null;
+        function renderChart() {
+            const ctx = document.getElementById('stackChart').getContext('2d');
+            const selId = document.getElementById('graphDrugSelect').value;
+            
+            if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+            
+            const displayBox = document.getElementById('currentLevelBox');
+            if (!selId) {
+                if(displayBox) displayBox.style.display = 'none';
+                return;
+            }
+
+            const drug = drugs.find(d => d.id == selId);
+            if (!drug) return;
+
+            const start = new Date(document.getElementById('graphStartDate').value).getTime();
+            const end = new Date(document.getElementById('graphEndDate').value).setHours(23,59,59);
+            const relevant = logs.filter(l => l.drugId == drug.id);
+            const dataPoints = [];
+
+            const now = new Date().getTime();
+            let currentTotal = 0;
+
+            for (let t = start; t <= end; t += (4*3600*1000)) {
+                let total = 0;
+                relevant.forEach(l => {
+                    const lt = new Date(l.datetime).getTime();
+                    if (!isNaN(lt) && lt <= t) {
+                        const elapsed = (t - lt)/(3600*1000);
+                        total += l.dose * Math.pow(0.5, elapsed/drug.halfLife);
+                    }
+                });
+                dataPoints.push({x: t, y: total});
+            }
+
+            relevant.forEach(l => {
+                const lt = new Date(l.datetime).getTime();
+                if (!isNaN(lt) && lt <= now) {
+                     const elapsed = (now - lt)/(3600*1000);
+                     currentTotal += l.dose * Math.pow(0.5, elapsed/drug.halfLife);
+                }
+            });
+            
+            if(displayBox) {
+                displayBox.style.display = 'block';
+                document.getElementById('currentLevelValue').textContent = `${currentTotal.toFixed(2)} ${drug.unit}`;
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { 
+                    datasets: [{ 
+                        label: `${drug.name}`, 
+                        data: dataPoints, 
+                        borderColor: '#27ae60', 
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)', 
+                        borderWidth: 2, 
+                        fill: true, 
+                        pointRadius: 0,
+                        hitRadius: 10
+                    }] 
+                },
+                options: {
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { 
+                        x: { type: 'time', time: { unit: 'day', displayFormats:{day:'MM/dd'} } }, 
+                        y: { beginAtZero: true } 
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].parsed.x);
+                                    return date.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                },
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(d => d.style.display='none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).style.display='block';
+            event.target.classList.add('active');
+            if(id==='analyze') setTimeout(renderChart, 100);
+        }
+
+        // ================= 계산기 로직 =================
+        function setupPillGroup(groupName, inputId, callback) {
+            const group = document.querySelector(`.pill-row[data-group="${groupName}"]`);
+            const input = document.getElementById(inputId);
+            if(!group || !input) return;
+            group.addEventListener('click', (e) => {
+                const pill = e.target.closest('.pill');
+                if(!pill) return;
+                group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                const val = pill.getAttribute('data-value');
+                if(val === 'custom') { input.focus(); input.select?.(); }
+                else { input.value = val; }
+                if(callback) callback();
+            });
+        }
+
+        function updateWaterCc() {
+            const v = parseFloat(document.getElementById('waterMl').value);
+            const t = document.getElementById('waterCcText');
+            if(v > 0) t.textContent = `${v} mL = ${v} cc`;
+            else t.textContent = '';
+        }
+
+        function updateDoseMg() {
+            const v = parseFloat(document.getElementById('doseMcg').value);
+            const t = document.getElementById('doseMgText');
+            if(v > 0) t.textContent = `${v/1000} mg`;
+            else t.textContent = '';
+        }
+
+        setupPillGroup('peptide', 'peptideMg');
+        setupPillGroup('water', 'waterMl', updateWaterCc);
+        setupPillGroup('dose', 'doseMcg', updateDoseMg);
+        
+        document.getElementById('waterMl').addEventListener('input', updateWaterCc);
+        document.getElementById('doseMcg').addEventListener('input', updateDoseMg);
+
+        document.getElementById('resetCalcBtn').addEventListener('click', () => {
+            ['peptideMg','waterMl','doseMcg','intervalCount','intervalTimes','peptidePrice'].forEach(id => document.getElementById(id).value = '');
+            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+            document.getElementById('calcErrorBox').style.display='none';
+            document.getElementById('concMgMl').textContent = '-';
+            document.getElementById('concMcgMl').textContent = '-';
+            document.getElementById('volMl').textContent = '-';
+            document.getElementById('volCc').textContent = '-';
+            document.getElementById('uiUnits').textContent = '-';
+            document.getElementById('vialUsage').textContent = '-';
+            document.getElementById('vialRemain').textContent = ''; 
+            document.getElementById('doseMgText').textContent = '';
+            document.getElementById('monthlyCostBox').style.display = 'none';
+        });
+
+        document.getElementById('calcBtn').addEventListener('click', () => {
+            const errBox = document.getElementById('calcErrorBox');
+            errBox.style.display = 'none';
+
+            const pMg = parseFloat(document.getElementById('peptideMg').value);
+            const wMl = parseFloat(document.getElementById('waterMl').value);
+            const dMcg = parseFloat(document.getElementById('doseMcg').value);
+            const iCount = parseFloat(document.getElementById('intervalCount').value);
+            const iTimes = parseFloat(document.getElementById('intervalTimes').value);
+            const iUnit = document.getElementById('intervalUnit').value;
+
+            if(!pMg || !wMl || !dMcg || !iCount || !iTimes) {
+                errBox.textContent = "⚠ 모든 값을 입력해주세요.";
+                errBox.style.display = 'block';
+                return;
+            }
+
+            const concMg = pMg / wMl;
+            const concMcg = concMg * 1000;
+            const vol = dMcg / concMcg;
+            const ui = vol * 100;
+
+            document.getElementById('concMgMl').textContent = `${concMg.toFixed(2)} mg/mL`;
+            document.getElementById('concMcgMl').textContent = `${concMcg.toFixed(0)} mcg/mL`;
+            
+            document.getElementById('volMl').textContent = `${vol.toFixed(3)} mL`; 
+            document.getElementById('volCc').textContent = `${vol.toFixed(3)} cc`;
+
+            document.getElementById('uiUnits').textContent = `${ui.toFixed(1)} IU`;
+
+            const warning = document.getElementById('penWarning');
+            if(ui > 60) {
+                warning.style.display = 'block';
+                warning.textContent = `⚠ 60 IU 초과 (약 ${Math.ceil(ui/60)}회로 나누어 주사)`;
+            } else {
+                warning.style.display = 'none';
+            }
+
+            const totalMcg = pMg * 1000;
+            const doses = Math.floor(totalMcg / dMcg);
+            const rawDuration = doses * iCount / iTimes;
+            const unitText = iUnit === 'day' ? '일' : '주';
+            
+            document.getElementById('vialUsage').textContent = `${Math.floor(rawDuration)}${unitText}`;
+            
+            const remain = totalMcg - (doses * dMcg);
+            const remainBox = document.getElementById('vialRemain');
+            if (remain > 0) {
+                remainBox.textContent = `(잔여: ${Math.round(remain)} mcg)`;
+            } else {
+                remainBox.textContent = '';
+            }
+            
+            // 비용
+            const currency = document.getElementById('currencyUnit').value;
+            const price = parseFloat(document.getElementById('peptidePrice').value);
+            const pType = document.getElementById('peptidePriceType').value;
+            
+            if(currency && price > 0) {
+                const daysPerPeriod = iUnit === 'day' ? iCount : iCount * 7;
+                const injPerMonth = (iTimes / daysPerPeriod) * 30;
+                const usedMcgPerMonth = injPerMonth * dMcg;
+                const vialsPerMonth = usedMcgPerMonth / totalMcg;
+                
+                let unitPrice = pType === 'kit' ? price/10 : price;
+                let monthlyCost = vialsPerMonth * unitPrice;
+                
+                const symbol = currency === 'KRW' ? '₩' : '$';
+                const formattedCost = currency === 'KRW' ? Math.round(monthlyCost).toLocaleString() : monthlyCost.toFixed(2);
+                
+                document.getElementById('monthlyCostBox').style.display = 'block';
+                document.getElementById('monthlyCostValue').textContent = `${symbol}${formattedCost}`;
+                document.getElementById('monthlyCostDetail').textContent = `약 ${vialsPerMonth.toFixed(1)}병/월`;
+            } else {
+                document.getElementById('monthlyCostBox').style.display = 'none';
+            }
+        });
+
+        // 초기 실행: 저장된 데이터 불러오기
+        loadData();
+    </script>
+</body>
+</html>
