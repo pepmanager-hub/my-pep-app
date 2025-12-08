@@ -311,7 +311,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>주기</label>
-                            <input type="number" id="intervalCount" placeholder="1">
+                            <input type="number" id="intervalCount">
                         </div>
                         <div class="form-group">
                             <label>단위</label>
@@ -322,33 +322,39 @@
                         </div>
                         <div class="form-group">
                             <label>횟수</label>
-                            <input type="number" id="intervalTimes" placeholder="1">
+                            <input type="number" id="intervalTimes">
                         </div>
                     </div>
                 </div>
 
-                <div class="section-title" style="font-weight:bold; color:#555; margin-bottom:12px; font-size:1.1em;">3. 비용 (선택)</div>
-                <div class="calc-card">
-                     <div class="form-row">
-                        <div class="form-group">
-                            <label>화폐</label>
-                            <select id="currencyUnit">
-                                <option value="">선택 안함</option>
-                                <option value="KRW">원 (KRW)</option>
-                                <option value="USD">달러 (USD)</option>
-                            </select>
+                <div class="toggle-header section-title" onclick="toggleSection('costCalcContent', 'costCalcArrow')" style="font-weight:bold; color:#555; margin-bottom:12px; font-size:1.1em; border-bottom:none; display:flex; justify-content:space-between; cursor:pointer;">
+                    <span>3. 비용</span>
+                    <span id="costCalcArrow" class="toggle-icon">▼</span>
+                </div>
+
+                <div id="costCalcContent" class="toggle-content">
+                    <div class="calc-card">
+                         <div class="form-row">
+                            <div class="form-group">
+                                <label>화폐</label>
+                                <select id="currencyUnit">
+                                    <option value="">계산 안함</option>
+                                    <option value="KRW">원 (KRW)</option>
+                                    <option value="USD">달러 (USD)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>가격 기준</label>
+                                 <select id="peptidePriceType">
+                                    <option value="vial">1 바이알</option>
+                                    <option value="kit">1 키트(10바이알)</option>
+                                </select>
+                            </div>
+                         </div>
+                         <div class="form-group" style="margin-top:10px;">
+                            <label>금액 입력</label>
+                            <input type="number" id="peptidePrice" placeholder="금액을 입력하세요 (숫자)">
                         </div>
-                        <div class="form-group">
-                            <label>가격 기준</label>
-                             <select id="peptidePriceType">
-                                <option value="vial">1 바이알</option>
-                                <option value="kit">1 키트(10바이알)</option>
-                            </select>
-                        </div>
-                     </div>
-                     <div class="form-group" style="margin-top:10px;">
-                        <label>금액 입력</label>
-                        <input type="number" id="peptidePrice" placeholder="금액을 입력하세요 (숫자)">
                     </div>
                 </div>
 
@@ -525,7 +531,6 @@
             saveData();
             updateUI();
             
-            // 알림 및 초기화
             alert("펩타이드가 저장되었습니다.");
             document.getElementById('drugName').value = '';
             document.getElementById('drugHalfLife').value = '';
@@ -579,7 +584,6 @@
             saveData();
             updateUI();
             
-            // 알림 및 초기화 (용량, 부위 삭제 / 시간 갱신)
             alert("투여 기록이 추가되었습니다.");
             document.getElementById('logDose').value = '';
             document.getElementById('logSite').value = '';
