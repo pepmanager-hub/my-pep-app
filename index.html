@@ -102,8 +102,9 @@
         .output-value { font-size: 1.25em; font-weight: bold; color: #333; }
         
         .calc-btn-row { margin-top: 20px; display: flex; gap: 12px; }
+        /* [수정] flex: 1로 변경하여 두 버튼의 너비를 균등하게 조정 */
         .btn-calc-reset { flex:1; background-color: #95a5a6; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
-        .btn-calc-run { flex:2; background-color: #27ae60; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
+        .btn-calc-run { flex:1; background-color: #27ae60; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
         
         .warning-text { color: var(--danger-color); font-size: 0.95em; margin-top: 8px; font-weight: bold; }
         .error-box { background-color: #fdecea; color: var(--danger-color); padding: 14px; border-radius: 10px; margin-bottom: 15px; display: none; border: 1px solid #fadbd8; font-weight: bold; }
