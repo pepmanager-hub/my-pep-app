@@ -774,10 +774,11 @@
                     {
                         label: '현재',
                         data: [{x: now, y: currentTotal}],
-                        borderColor: '#e74c3c',
+                        borderColor: '#ffffff',
+                        borderWidth: 3,
                         backgroundColor: '#e74c3c',
-                        pointRadius: 5,
-                        pointHoverRadius: 7,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
                         showLine: false
                     }] 
                 },
@@ -792,8 +793,9 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            mode: 'index',
+                            mode: 'nearest', // Changed to nearest
                             intersect: false,
+                            yAlign: 'bottom', // Forces tooltip above the point
                             callbacks: {
                                 title: function(context) {
                                     const date = new Date(context[0].parsed.x);
