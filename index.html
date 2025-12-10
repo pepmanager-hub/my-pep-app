@@ -102,7 +102,6 @@
         .output-value { font-size: 1.25em; font-weight: bold; color: #333; }
         
         .calc-btn-row { margin-top: 20px; display: flex; gap: 12px; }
-        /* [수정] flex: 1로 변경하여 두 버튼의 너비를 균등하게 조정 */
         .btn-calc-reset { flex:1; background-color: #95a5a6; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
         .btn-calc-run { flex:1; background-color: #27ae60; color: white; padding: 14px; border:none; border-radius:10px; font-weight:bold; font-size: 1em; }
         
@@ -759,29 +758,36 @@
                 document.getElementById('currentLevelValue').textContent = `${currentTotal.toFixed(2)} ${drug.unit}`;
             }
 
+            // 그래프 데이터셋 구성
+            const chartDatasets = [{ 
+                label: `${drug.name}`, 
+                data: dataPoints, 
+                borderColor: '#27ae60', 
+                backgroundColor: 'rgba(39, 174, 96, 0.1)', 
+                borderWidth: 2, 
+                fill: true, 
+                pointRadius: 0,
+                hitRadius: 10
+            }];
+
+            // [수정] 현재 시각(now)이 조회 범위(start~end) 내에 있을 때만 마커 표시
+            if (now >= start && now <= end) {
+                chartDatasets.push({
+                    label: '현재',
+                    data: [{x: now, y: currentTotal}],
+                    borderColor: '#ffffff',
+                    borderWidth: 3,
+                    backgroundColor: '#e74c3c',
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: false
+                });
+            }
+
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: { 
-                    datasets: [{ 
-                        label: `${drug.name}`, 
-                        data: dataPoints, 
-                        borderColor: '#27ae60', 
-                        backgroundColor: 'rgba(39, 174, 96, 0.1)', 
-                        borderWidth: 2, 
-                        fill: true, 
-                        pointRadius: 0,
-                        hitRadius: 10
-                    },
-                    {
-                        label: '현재',
-                        data: [{x: now, y: currentTotal}],
-                        borderColor: '#ffffff',
-                        borderWidth: 3,
-                        backgroundColor: '#e74c3c',
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                        showLine: false
-                    }] 
+                    datasets: chartDatasets 
                 },
                 options: {
                     responsive: true, 
@@ -794,9 +800,9 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            mode: 'nearest', // Changed to nearest
+                            mode: 'nearest',
                             intersect: false,
-                            yAlign: 'bottom', // Forces tooltip above the point
+                            yAlign: 'bottom',
                             callbacks: {
                                 title: function(context) {
                                     const date = new Date(context[0].parsed.x);
