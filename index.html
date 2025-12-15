@@ -167,6 +167,10 @@
                             <label>반감기 (시간)</label>
                             <input type="number" id="drugHalfLife" placeholder="예: 120 (5일)">
                         </div>
+                        <div class="form-group">
+                            <label>피크 도달 (시간)</label>
+                            <input type="number" id="drugTmax" placeholder="0이면 즉시">
+                        </div>
                         <div class="form-group" style="flex:2">
                             <label>메모</label>
                             <input type="text" id="drugNote" placeholder="설명">
@@ -176,7 +180,7 @@
                     
                     <div class="table-responsive" style="margin-top:15px;">
                         <table id="drugTable">
-                            <thead><tr><th>펩타이드명</th><th>반감기 / 용량단위</th><th>수정/삭제</th></tr></thead>
+                            <thead><tr><th>펩타이드명</th><th>반감기 / 피크 / 단위</th><th>수정/삭제</th></tr></thead>
                             <tbody></tbody>
                         </table>
                     </div>
@@ -477,6 +481,7 @@
                     const now = Date.now();
                     if (workbook.Sheets['Drugs']) {
                         const newDrugs = XLSX.utils.sheet_to_json(workbook.Sheets['Drugs']);
+                        // 기존 DB 호환성 유지: tmax가 없으면 undefined(나중에 0 처리)
                         drugs = newDrugs.map((d, idx) => ({ ...d, id: d.id || (now + idx) }));
                     }
                     if (workbook.Sheets['Logs']) {
@@ -509,7 +514,10 @@
             const name = document.getElementById('drugName').value;
             const unit = document.getElementById('drugUnit').value;
             const halfLife = parseFloat(document.getElementById('drugHalfLife').value);
+            // [수정] 피크 도달 시간 읽기
+            const tmax = parseFloat(document.getElementById('drugTmax').value) || 0; 
             const note = document.getElementById('drugNote').value;
+            
             if (!name || isNaN(halfLife)) return alert("펩타이드명과 반감기는 필수입니다.");
             
             const id = editingDrugId || Date.now();
@@ -524,7 +532,8 @@
                 });
             }
             
-            drugs.push({ id: id, name: name, unit: unit, halfLife: halfLife, note: note });
+            // [수정] tmax 저장
+            drugs.push({ id: id, name: name, unit: unit, halfLife: halfLife, tmax: tmax, note: note });
             
             editingDrugId = null;
             
@@ -534,6 +543,7 @@
             alert("펩타이드가 저장되었습니다.");
             document.getElementById('drugName').value = '';
             document.getElementById('drugHalfLife').value = '';
+            document.getElementById('drugTmax').value = ''; // 초기화
             document.getElementById('drugNote').value = '';
         }
 
@@ -544,6 +554,8 @@
             document.getElementById('drugName').value = drug.name;
             document.getElementById('drugUnit').value = drug.unit;
             document.getElementById('drugHalfLife').value = drug.halfLife;
+            // [수정] 수정 모드 시 tmax 불러오기
+            document.getElementById('drugTmax').value = drug.tmax || ''; 
             document.getElementById('drugNote').value = drug.note || '';
 
             editingDrugId = id;
@@ -637,10 +649,12 @@
             const drugTbody = document.querySelector('#drugTable tbody');
             drugTbody.innerHTML = '';
             drugs.forEach(d => {
+                // [수정] 피크 시간 표시
+                const tmaxText = (d.tmax && d.tmax > 0) ? `${d.tmax}h` : '즉시';
                 drugTbody.innerHTML += `
                 <tr>
                     <td><strong>${d.name}</strong></td>
-                    <td><span style="font-size:0.9em; color:#666;">${d.halfLife}h / ${d.unit}</span><br><span style="font-size:0.85em; color:#999;">${d.note||''}</span></td>
+                    <td><span style="font-size:0.9em; color:#666;">반감:${d.halfLife}h / 피크:${tmaxText}</span><br><span style="font-size:0.85em; color:#999;">${d.note||''}</span></td>
                     <td style="width: 70px;">
                         <div class="btn-stack">
                             <button class="edit-btn" onclick="editDrug(${d.id})">수정</button>
@@ -710,6 +724,49 @@
         }
 
         let chartInstance = null;
+
+        // [추가] 약물 농도를 계산하는 헬퍼 함수
+        function getDrugLevel(dose, elapsed, halfLife, tmax) {
+             if (elapsed < 0) return 0;
+             // 1. Tmax가 없거나 0이면 기존 단순 반감기 모델
+             if (!tmax || tmax <= 0) {
+                 return dose * Math.pow(0.5, elapsed / halfLife);
+             }
+
+             // 2. 흡수 지연 모델 (Bateman Function 유사 적용)
+             // 제거 상수 (Elimination rate constant)
+             const ke = Math.log(2) / halfLife;
+             
+             // 흡수 상수 (Absorption rate constant) 추정
+             // Tmax = (ln(ka) - ln(ke)) / (ka - ke) 공식을 만족하는 ka를 근사적으로 찾습니다.
+             // 간단한 이진 탐색으로 근사값 ka를 찾습니다.
+             // 보통 ka > ke (흡수가 제거보다 빠름)
+             
+             let ka = 0;
+             // 휴리스틱: ka를 ke보다 약간 큰 값부터 시작해서 찾음
+             let min = ke * 1.001; 
+             let max = 1000; // 충분히 큰 값
+             
+             // 20번 반복이면 충분히 수렴
+             for(let i=0; i<20; i++) {
+                 let mid = (min + max) / 2;
+                 let estimatedTmax = (Math.log(mid) - Math.log(ke)) / (mid - ke);
+                 if (estimatedTmax > tmax) {
+                     // 예상 Tmax가 너무 길다 -> 흡수가 너무 느리다 -> ka를 높여야 함 (X)
+                     // ka가 커질수록 Tmax는 짧아짐.
+                     // 따라서 estimatedTmax > tmax (너무 느림) 이면 ka를 더 키워야 함.
+                     min = mid;
+                 } else {
+                     max = mid;
+                 }
+             }
+             ka = (min + max) / 2;
+
+             // Bateman Function (Scale Factor 포함: AUC 보존을 위해 ka/(ka-ke) 곱함)
+             // C(t) = Dose * (ka / (ka - ke)) * (exp(-ke * t) - exp(-ka * t))
+             return dose * (ka / (ka - ke)) * (Math.exp(-ke * elapsed) - Math.exp(-ka * elapsed));
+        }
+
         function renderChart() {
             const ctx = document.getElementById('stackChart').getContext('2d');
             const selId = document.getElementById('graphDrugSelect').value;
@@ -733,23 +790,25 @@
             const now = new Date().getTime();
             let currentTotal = 0;
 
+            // [수정] 데이터 포인트 계산 시 getDrugLevel 사용
             for (let t = start; t <= end; t += (4*3600*1000)) {
                 let total = 0;
                 relevant.forEach(l => {
                     const lt = new Date(l.datetime).getTime();
                     if (!isNaN(lt) && lt <= t) {
                         const elapsed = (t - lt)/(3600*1000);
-                        total += l.dose * Math.pow(0.5, elapsed/drug.halfLife);
+                        total += getDrugLevel(l.dose, elapsed, drug.halfLife, drug.tmax);
                     }
                 });
                 dataPoints.push({x: t, y: total});
             }
 
+            // [수정] 현재 레벨 계산 시 getDrugLevel 사용
             relevant.forEach(l => {
                 const lt = new Date(l.datetime).getTime();
                 if (!isNaN(lt) && lt <= now) {
                      const elapsed = (now - lt)/(3600*1000);
-                     currentTotal += l.dose * Math.pow(0.5, elapsed/drug.halfLife);
+                     currentTotal += getDrugLevel(l.dose, elapsed, drug.halfLife, drug.tmax);
                 }
             });
             
@@ -758,7 +817,6 @@
                 document.getElementById('currentLevelValue').textContent = `${currentTotal.toFixed(2)} ${drug.unit}`;
             }
 
-            // 그래프 데이터셋 구성
             const chartDatasets = [{ 
                 label: `${drug.name}`, 
                 data: dataPoints, 
@@ -770,7 +828,6 @@
                 hitRadius: 10
             }];
 
-            // [수정] 현재 시각(now)이 조회 범위(start~end) 내에 있을 때만 마커 표시
             if (now >= start && now <= end) {
                 chartDatasets.push({
                     label: '현재',
