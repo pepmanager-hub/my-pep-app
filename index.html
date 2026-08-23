@@ -514,7 +514,6 @@
             const name = document.getElementById('drugName').value;
             const unit = document.getElementById('drugUnit').value;
             const halfLife = parseFloat(document.getElementById('drugHalfLife').value);
-            // [수정] 피크 도달 시간 읽기
             const tmax = parseFloat(document.getElementById('drugTmax').value) || 0; 
             const note = document.getElementById('drugNote').value;
             
@@ -532,7 +531,6 @@
                 });
             }
             
-            // [수정] tmax 저장
             drugs.push({ id: id, name: name, unit: unit, halfLife: halfLife, tmax: tmax, note: note });
             
             editingDrugId = null;
@@ -543,7 +541,7 @@
             alert("펩타이드가 저장되었습니다.");
             document.getElementById('drugName').value = '';
             document.getElementById('drugHalfLife').value = '';
-            document.getElementById('drugTmax').value = ''; // 초기화
+            document.getElementById('drugTmax').value = ''; 
             document.getElementById('drugNote').value = '';
         }
 
@@ -554,7 +552,6 @@
             document.getElementById('drugName').value = drug.name;
             document.getElementById('drugUnit').value = drug.unit;
             document.getElementById('drugHalfLife').value = drug.halfLife;
-            // [수정] 수정 모드 시 tmax 불러오기
             document.getElementById('drugTmax').value = drug.tmax || ''; 
             document.getElementById('drugNote').value = drug.note || '';
 
@@ -649,7 +646,6 @@
             const drugTbody = document.querySelector('#drugTable tbody');
             drugTbody.innerHTML = '';
             drugs.forEach(d => {
-                // [수정] 피크 시간 표시
                 const tmaxText = (d.tmax && d.tmax > 0) ? `${d.tmax}h` : '즉시';
                 drugTbody.innerHTML += `
                 <tr>
@@ -692,7 +688,16 @@
             const logTbody = document.querySelector('#logTable tbody');
             logTbody.innerHTML = '';
             const curFilter = filterSelect.value;
-            const sorted = [...logs].sort((a,b) => new Date(b.datetime)-new Date(a.datetime));
+            
+            // [수정] 날짜(최신순) 정렬을 더욱 안정적이고 확실하게 적용 (Date 객체 파싱 오류 방지)
+            const sorted = [...logs].sort((a, b) => {
+                const timeA = new Date(a.datetime).getTime();
+                const timeB = new Date(b.datetime).getTime();
+                if (!isNaN(timeA) && !isNaN(timeB)) {
+                    return timeB - timeA;
+                }
+                return (b.datetime || "").localeCompare(a.datetime || "");
+            });
             
             sorted.forEach(l => {
                 if(curFilter !== 'all' && l.drugId != curFilter) return;
@@ -725,36 +730,22 @@
 
         let chartInstance = null;
 
-        // [추가] 약물 농도를 계산하는 헬퍼 함수
         function getDrugLevel(dose, elapsed, halfLife, tmax) {
              if (elapsed < 0) return 0;
-             // 1. Tmax가 없거나 0이면 기존 단순 반감기 모델
              if (!tmax || tmax <= 0) {
                  return dose * Math.pow(0.5, elapsed / halfLife);
              }
 
-             // 2. 흡수 지연 모델 (Bateman Function 유사 적용)
-             // 제거 상수 (Elimination rate constant)
              const ke = Math.log(2) / halfLife;
              
-             // 흡수 상수 (Absorption rate constant) 추정
-             // Tmax = (ln(ka) - ln(ke)) / (ka - ke) 공식을 만족하는 ka를 근사적으로 찾습니다.
-             // 간단한 이진 탐색으로 근사값 ka를 찾습니다.
-             // 보통 ka > ke (흡수가 제거보다 빠름)
-             
              let ka = 0;
-             // 휴리스틱: ka를 ke보다 약간 큰 값부터 시작해서 찾음
              let min = ke * 1.001; 
-             let max = 1000; // 충분히 큰 값
+             let max = 1000; 
              
-             // 20번 반복이면 충분히 수렴
              for(let i=0; i<20; i++) {
                  let mid = (min + max) / 2;
                  let estimatedTmax = (Math.log(mid) - Math.log(ke)) / (mid - ke);
                  if (estimatedTmax > tmax) {
-                     // 예상 Tmax가 너무 길다 -> 흡수가 너무 느리다 -> ka를 높여야 함 (X)
-                     // ka가 커질수록 Tmax는 짧아짐.
-                     // 따라서 estimatedTmax > tmax (너무 느림) 이면 ka를 더 키워야 함.
                      min = mid;
                  } else {
                      max = mid;
@@ -762,8 +753,6 @@
              }
              ka = (min + max) / 2;
 
-             // Bateman Function (Scale Factor 포함: AUC 보존을 위해 ka/(ka-ke) 곱함)
-             // C(t) = Dose * (ka / (ka - ke)) * (exp(-ke * t) - exp(-ka * t))
              return dose * (ka / (ka - ke)) * (Math.exp(-ke * elapsed) - Math.exp(-ka * elapsed));
         }
 
@@ -790,7 +779,6 @@
             const now = new Date().getTime();
             let currentTotal = 0;
 
-            // [수정] 데이터 포인트 계산 시 getDrugLevel 사용
             for (let t = start; t <= end; t += (4*3600*1000)) {
                 let total = 0;
                 relevant.forEach(l => {
@@ -803,7 +791,6 @@
                 dataPoints.push({x: t, y: total});
             }
 
-            // [수정] 현재 레벨 계산 시 getDrugLevel 사용
             relevant.forEach(l => {
                 const lt = new Date(l.datetime).getTime();
                 if (!isNaN(lt) && lt <= now) {
